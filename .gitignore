@@ -1,0 +1,5 @@
+venv/
+std.log
+client_*
+.idea/
+__pycache__/
