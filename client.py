@@ -137,7 +137,7 @@ class ClientGui(tk.Tk):
 
     def __disconnect(self):
         try:
-            self.__tcp_client.send(b'__apple_is_fucking_shit__')
+            self.__tcp_client.send(b'__exit_command__')
             self.__is_connected = False
             self.__tcp_client.close()
 

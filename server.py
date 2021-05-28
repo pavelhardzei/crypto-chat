@@ -29,7 +29,7 @@ class Server:
             message: bytes = client_socket.recv(1024)
             print(message)
 
-            if message == b'__apple_is_fucking_shit__':
+            if message == b'__exit_command__':
                 self.__all_client.remove(client_socket)
                 break
 
