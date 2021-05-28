@@ -90,8 +90,8 @@ class ClientGui(tk.Tk):
 
         tk.Label(master=header_frame, text="Active connections", font=font)\
             .grid(row=0, column=0, sticky='we', pady=10, padx=10)
-        tk.Button(master=header_frame, text="Fetch connections", font=font)\
-            .grid(row=0, column=1, sticky='we', pady=10, ipady=2, padx=10)
+        self.__fetch_button = tk.Button(master=header_frame, text="Fetch connections", font=font, state=tk.DISABLED)
+        self.__fetch_button.grid(row=0, column=1, sticky='we', pady=10, ipady=2, padx=10)
 
         header_frame.grid(row=0, column=0, sticky='ew')
 
@@ -134,13 +134,12 @@ class ClientGui(tk.Tk):
             self.__text_box_tab2.config(state=tk.DISABLED)
 
             self.__ip_entry.delete(0, tk.END)
-            self.__ip_entry.config(state=tk.DISABLED)
             self.__port_entry.delete(0, tk.END)
-            self.__port_entry.config(state=tk.DISABLED)
-            self.__connect_button.config(state=tk.DISABLED)
 
-            self.__send_button.config(state=tk.NORMAL)
-            self.__disconnect_button.config(state=tk.NORMAL)
+            self.__state_tab1(tk.NORMAL)
+            self.__state_tab2(tk.DISABLED)
+            self.__state_tab3(tk.NORMAL)
+
             self.__is_connected = True
 
             threading.Thread(target=self.__monitor_message).start()
@@ -174,12 +173,9 @@ class ClientGui(tk.Tk):
             self.__is_connected = False
             self.__tcp_client.close()
 
-            self.__send_button.config(state=tk.DISABLED)
-            self.__disconnect_button.config(state=tk.DISABLED)
-
-            self.__ip_entry.config(state=tk.NORMAL)
-            self.__port_entry.config(state=tk.NORMAL)
-            self.__connect_button.config(state=tk.NORMAL)
+            self.__state_tab1(tk.DISABLED)
+            self.__state_tab2(tk.NORMAL)
+            self.__state_tab3(tk.DISABLED)
         except Exception as e:
             self.__logger.error(e)
 
@@ -191,6 +187,19 @@ class ClientGui(tk.Tk):
     def __close_window(self):
         self.__disconnect()
         self.destroy()
+
+    def __state_tab1(self, state):
+        self.__send_button.config(state=state)
+        self.__disconnect_button.config(state=state)
+
+    def __state_tab2(self, state):
+        self.__ip_entry.config(state=state)
+        self.__port_entry.config(state=state)
+        self.__connect_button.config(state=state)
+
+    def __state_tab3(self, state):
+        self.__fetch_button.config(state=state)
+        self.__list_box.delete(0, tk.END)
 
 
 def main():
