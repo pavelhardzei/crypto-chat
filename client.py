@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
-import socket
 from tkinter import messagebox
+from tkinter import font as tkfont
+import socket
 import threading
 import logging
 
@@ -15,14 +16,18 @@ class ClientGui(tk.Tk):
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", self.__close_window)
 
+        font = tkfont.Font(family="Times", size=14)
+
         # Tabs
         tabControl = ttk.Notebook(master=self, takefocus=False)
 
         tab1 = ttk.Frame(master=tabControl)
         tab2 = ttk.Frame(master=tabControl)
+        tab3 = ttk.Frame(master=tabControl)
 
         tabControl.add(tab1, text='Chat')
         tabControl.add(tab2, text='Settings')
+        tabControl.add(tab3, text='People')
         tabControl.pack(expand=True, fill=tk.BOTH)
 
         # tab 1
@@ -44,18 +49,18 @@ class ClientGui(tk.Tk):
         buttons_frame.columnconfigure(0, weight=1)
         buttons_frame.columnconfigure(1, weight=1)
         self.__message_var = tk.StringVar()
-        tk.Entry(master=buttons_frame, textvar=self.__message_var, font="Times 14") \
+        tk.Entry(master=buttons_frame, textvar=self.__message_var, font=font) \
             .grid(row=0, column=0, columnspan=2, padx=10, ipady=5, sticky="ew")
 
         self.__send_button = tk.Button(master=buttons_frame, text="Send",
-                                       font="Times 14", state=tk.DISABLED, command=self.__send_message)
+                                       font=font, state=tk.DISABLED, command=self.__send_message)
         self.__send_button.grid(row=1, column=0, pady=10, padx=10, ipady=2, sticky="ew")
-        tk.Button(master=buttons_frame, text="Clear", font="Times 14",
+        tk.Button(master=buttons_frame, text="Clear", font=font,
                   command=lambda: self.__clear_text_box_tab1()) \
             .grid(row=1, column=1, pady=10, padx=10, ipady=2, sticky="ew")
 
         self.__disconnect_button = tk.Button(master=buttons_frame, text="Disconnect",
-                                             font="Times 14", state=tk.DISABLED, command=self.__disconnect)
+                                             font=font, state=tk.DISABLED, command=self.__disconnect)
         self.__disconnect_button.grid(row=2, column=0, columnspan=2, sticky="we", padx=10, ipady=2, pady=10)
 
         buttons_frame.grid(row=1, column=0, sticky="nsew")
@@ -63,18 +68,46 @@ class ClientGui(tk.Tk):
         # tab 2
         tab2.columnconfigure(0, weight=1)
 
-        self.__ip_entry = tk.Entry(master=tab2, font="Times 14")
+        self.__ip_entry = tk.Entry(master=tab2, font=font)
         self.__ip_entry.grid(row=0, column=0, pady=5, padx=10, ipady=5, sticky="we")
-        self.__port_entry = tk.Entry(master=tab2, font="Times 14")
+        self.__port_entry = tk.Entry(master=tab2, font=font)
         self.__port_entry.grid(row=1, column=0, pady=5, padx=10, ipady=5, sticky="we")
 
         self.__connect_button = tk.Button(master=tab2, text="Connect to the server",
-                                          font="Times 14", command=self.__connect_handler)
+                                          font=font, command=self.__connect_handler)
         self.__connect_button.grid(row=2, column=0, pady=10, padx=10, ipady=2, sticky="ew")
 
         tab2.rowconfigure(3, weight=1)
         self.__text_box_tab2 = tk.Text(master=tab2, state=tk.DISABLED, width=30, height=10)
         self.__text_box_tab2.grid(row=3, column=0, padx=10, pady=20, sticky="nsew")
+
+        # tab 3
+        # header
+        tab3.columnconfigure(0, weight=1)
+        header_frame = tk.Frame(master=tab3)
+        header_frame.columnconfigure(0, weight=1)
+        header_frame.columnconfigure(1, weight=1)
+
+        tk.Label(master=header_frame, text="Active connections", font=font)\
+            .grid(row=0, column=0, sticky='we', pady=10, padx=10)
+        tk.Button(master=header_frame, text="Fetch connections", font=font)\
+            .grid(row=0, column=1, sticky='we', pady=10, ipady=2, padx=10)
+
+        header_frame.grid(row=0, column=0, sticky='ew')
+
+        # list_box_frame
+        tab3.rowconfigure(1, weight=1)
+        list_box_frame = tk.Frame(master=tab3)
+        list_box_frame.columnconfigure(0, weight=1)
+        list_box_frame.rowconfigure(0, weight=1)
+
+        scrollbar2 = tk.Scrollbar(master=list_box_frame)
+        self.__list_box = tk.Listbox(master=list_box_frame, yscrollcommand=scrollbar2.set, font=font, justify=tk.CENTER)
+        self.__list_box.grid(row=0, column=0, sticky='nsew')
+        scrollbar2.config(command=self.__list_box.yview)
+        scrollbar2.grid(row=0, column=1, sticky='ns')
+
+        list_box_frame.grid(row=1, column=0, sticky='nsew', padx=10, pady=10)
 
         # logging
         logging.basicConfig(filename="std.log", format='%(asctime)s - %(levelname)s - %(message)s',
