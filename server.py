@@ -21,7 +21,7 @@ class Server:
             if client not in self.__all_client:
                 self.__all_client.append(client)
                 threading.Thread(target=self.__message_handler, args=(client,)).start()
-                client.send(bytes("Successful chat connecting!", encoding="utf-8"))
+                client.send(b'Successful chat connecting!')
             time.sleep(1)
 
     def __message_handler(self, client_socket):
@@ -32,6 +32,9 @@ class Server:
             if message == b'__exit_command__':
                 self.__all_client.remove(client_socket)
                 break
+            if message == b'__fetch_connections__':
+                self.__fetch_connections(client_socket)
+                continue
 
             for client in self.__all_client:
                 if client != client_socket:
@@ -39,6 +42,16 @@ class Server:
                 else:
                     client.send(b'(You) ' + message)
             time.sleep(1)
+
+    def __fetch_connections(self, client_socket: socket.socket):
+        active_connections = bytes(' ', encoding='utf-8')
+        if len(self.__all_client) == 1:
+            client_socket.send(bytes('No active connections', encoding='utf-8'))
+            return
+        for client in self.__all_client:
+            if client != client_socket:
+                active_connections += bytes(str(self.__all_client.index(client)) + ' ', encoding='utf-8')
+        client_socket.send(active_connections)
 
 
 def main():

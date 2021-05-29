@@ -61,7 +61,10 @@ class ClientGui(tk.Tk):
 
         self.__disconnect_button = tk.Button(master=buttons_frame, text="Disconnect",
                                              font=font, state=tk.DISABLED, command=self.__disconnect)
-        self.__disconnect_button.grid(row=2, column=0, columnspan=2, sticky="we", padx=10, ipady=2, pady=10)
+        self.__disconnect_button.grid(row=2, column=0, sticky="we", padx=10, ipady=2, pady=10)
+        self.__destroy_channel = tk.Button(master=buttons_frame, text="Destroy channel",
+                                           font=font, state=tk.DISABLED)
+        self.__destroy_channel.grid(row=2, column=1, sticky="we", padx=10, ipady=2, pady=10)
 
         buttons_frame.grid(row=1, column=0, sticky="nsew")
 
@@ -90,7 +93,8 @@ class ClientGui(tk.Tk):
 
         tk.Label(master=header_frame, text="Active connections", font=font)\
             .grid(row=0, column=0, sticky='we', pady=10, padx=10)
-        self.__fetch_button = tk.Button(master=header_frame, text="Fetch connections", font=font, state=tk.DISABLED)
+        self.__fetch_button = tk.Button(master=header_frame, text="Fetch connections",
+                                        font=font, state=tk.DISABLED, command=self.__fetch_connections)
         self.__fetch_button.grid(row=0, column=1, sticky='we', pady=10, ipady=2, padx=10)
 
         header_frame.grid(row=0, column=0, sticky='ew')
@@ -103,6 +107,7 @@ class ClientGui(tk.Tk):
 
         scrollbar2 = tk.Scrollbar(master=list_box_frame)
         self.__list_box = tk.Listbox(master=list_box_frame, yscrollcommand=scrollbar2.set, font=font, justify=tk.CENTER)
+        self.__list_box.bind('<Double-1>', self.__build_channel)
         self.__list_box.grid(row=0, column=0, sticky='nsew')
         scrollbar2.config(command=self.__list_box.yview)
         scrollbar2.grid(row=0, column=1, sticky='ns')
@@ -125,7 +130,7 @@ class ClientGui(tk.Tk):
 
             self.__tcp_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__tcp_client.connect((self.__ip, self.__port))
-            self.__is_connected = True
+            # self.__is_connected = True
 
             message = self.__tcp_client.recv(1024)
             self.__text_box_tab2.config(state=tk.NORMAL)
@@ -136,13 +141,14 @@ class ClientGui(tk.Tk):
             self.__ip_entry.delete(0, tk.END)
             self.__port_entry.delete(0, tk.END)
 
-            self.__state_tab1(tk.NORMAL)
+            # self.__state_tab1(tk.NORMAL)
             self.__state_tab2(tk.DISABLED)
             self.__state_tab3(tk.NORMAL)
+            self.__disconnect_button.config(state=tk.NORMAL)
 
             self.__is_connected = True
 
-            threading.Thread(target=self.__monitor_message).start()
+            # threading.Thread(target=self.__monitor_message).start()
         except Exception as e:
             messagebox.showinfo("Exception", e)
             self.__logger.error(e)
@@ -191,6 +197,7 @@ class ClientGui(tk.Tk):
     def __state_tab1(self, state):
         self.__send_button.config(state=state)
         self.__disconnect_button.config(state=state)
+        self.__destroy_channel.config(state=state)
 
     def __state_tab2(self, state):
         self.__ip_entry.config(state=state)
@@ -200,6 +207,20 @@ class ClientGui(tk.Tk):
     def __state_tab3(self, state):
         self.__fetch_button.config(state=state)
         self.__list_box.delete(0, tk.END)
+
+    def __fetch_connections(self):
+        self.__list_box.delete(0, tk.END)
+        self.__tcp_client.send(b'__fetch_connections__')
+        active_connections = self.__tcp_client.recv(1024)
+        if active_connections == b'No active connections':
+            messagebox.showinfo("", "No active connections")
+            return
+        active_connections = active_connections.decode('utf-8').split()
+        for connection in active_connections:
+            self.__list_box.insert(tk.END, connection)
+
+    def __build_channel(self, event):
+        messagebox.showinfo("", "It is working")
 
 
 def main():
