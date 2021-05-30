@@ -49,8 +49,8 @@ class ClientGui(tk.Tk):
         buttons_frame.columnconfigure(0, weight=1)
         buttons_frame.columnconfigure(1, weight=1)
         self.__message_var = tk.StringVar()
-        tk.Entry(master=buttons_frame, textvar=self.__message_var, font=font) \
-            .grid(row=0, column=0, columnspan=2, padx=10, ipady=5, sticky="ew")
+        self.__message_entry = tk.Entry(master=buttons_frame, textvar=self.__message_var, font=font, state=tk.DISABLED)
+        self.__message_entry.grid(row=0, column=0, columnspan=2, padx=10, ipady=5, sticky="ew")
 
         self.__send_button = tk.Button(master=buttons_frame, text="Send",
                                        font=font, state=tk.DISABLED, command=self.__send_message)
@@ -62,9 +62,9 @@ class ClientGui(tk.Tk):
         self.__disconnect_button = tk.Button(master=buttons_frame, text="Disconnect",
                                              font=font, state=tk.DISABLED, command=self.__disconnect)
         self.__disconnect_button.grid(row=2, column=0, sticky="we", padx=10, ipady=2, pady=10)
-        self.__destroy_channel = tk.Button(master=buttons_frame, text="Destroy channel",
-                                           font=font, state=tk.DISABLED)
-        self.__destroy_channel.grid(row=2, column=1, sticky="we", padx=10, ipady=2, pady=10)
+        self.__destroy_button = tk.Button(master=buttons_frame, text="Destroy channel",
+                                          font=font, state=tk.DISABLED, command=self.__destroy_channel)
+        self.__destroy_button.grid(row=2, column=1, sticky="we", padx=10, ipady=2, pady=10)
 
         buttons_frame.grid(row=1, column=0, sticky="nsew")
 
@@ -130,25 +130,21 @@ class ClientGui(tk.Tk):
 
             self.__tcp_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__tcp_client.connect((self.__ip, self.__port))
-            # self.__is_connected = True
 
             message = self.__tcp_client.recv(1024)
-            self.__text_box_tab2.config(state=tk.NORMAL)
             self.__text_box_tab2.delete('1.0', tk.END)
-            self.__text_box_tab2.insert(index='end', chars=message.decode('utf-8') + '\n')
-            self.__text_box_tab2.config(state=tk.DISABLED)
+            self.__insert_in_text_box_tab2(message.decode('utf-8'))
 
             self.__ip_entry.delete(0, tk.END)
             self.__port_entry.delete(0, tk.END)
 
-            # self.__state_tab1(tk.NORMAL)
             self.__state_tab2(tk.DISABLED)
             self.__state_tab3(tk.NORMAL)
             self.__disconnect_button.config(state=tk.NORMAL)
 
             self.__is_connected = True
 
-            # threading.Thread(target=self.__monitor_message).start()
+            threading.Thread(target=self.__monitor_message).start()
         except Exception as e:
             messagebox.showinfo("Exception", e)
             self.__logger.error(e)
@@ -157,6 +153,24 @@ class ClientGui(tk.Tk):
         while self.__is_connected:
             try:
                 message = self.__tcp_client.recv(1024)
+
+                if message == b'__channel_established__':
+                    self.__interlocutor_id = self.__tcp_client.recv(1024)
+                    self.__insert_in_text_box_tab2("You connected to " + self.__interlocutor_id.decode('utf-8'))
+                    self.__state_tab1(tk.NORMAL)
+                    continue
+                if message == b'__no_active_connections__':
+                    messagebox.showinfo("", "No active connections")
+                    continue
+                if message == b'__all_connections__':
+                    message = self.__tcp_client.recv(1024).decode('utf-8').split()
+                    for connection in message:
+                        self.__list_box.insert(tk.END, connection)
+                    continue
+                if message == b'__build_failed__':
+                    messagebox.showinfo("", "Can't build channel")
+                    continue
+
                 self.__text_box_tab1.config(state=tk.NORMAL)
                 self.__text_box_tab1.insert(index='end', chars=message.decode('utf-8') + '\n')
                 self.__text_box_tab1.config(state=tk.DISABLED)
@@ -167,11 +181,25 @@ class ClientGui(tk.Tk):
         try:
             if self.__message_var.get().strip() == "":
                 return
-            self.__tcp_client.send(bytes(self.__message_var.get(), encoding="utf-8"))
+            self.__tcp_client.send(self.__interlocutor_id + b'\n' + bytes(self.__message_var.get(), encoding="utf-8"))
             self.__message_var.set("")
         except Exception as e:
-            messagebox.showinfo("Exception", e)
             self.__logger.error(e)
+
+    def __fetch_connections(self):
+        self.__list_box.delete(0, tk.END)
+        self.__tcp_client.send(b'__fetch_connections__')
+
+    def __build_channel(self, _):
+        try:
+            selection = self.__list_box.curselection()[0]
+            self.__tcp_client.send(b'__build_channel__')
+            self.__tcp_client.send(bytes(self.__list_box.get(selection), 'utf-8'))
+        except Exception as e:
+            self.__logger.error(e)
+
+    def __destroy_channel(self):
+        pass
 
     def __disconnect(self):
         try:
@@ -185,19 +213,25 @@ class ClientGui(tk.Tk):
         except Exception as e:
             self.__logger.error(e)
 
+    def __close_window(self):
+        self.__disconnect()
+        self.destroy()
+
     def __clear_text_box_tab1(self):
         self.__text_box_tab1.config(state=tk.NORMAL)
         self.__text_box_tab1.delete('1.0', tk.END)
         self.__text_box_tab1.config(state=tk.DISABLED)
 
-    def __close_window(self):
-        self.__disconnect()
-        self.destroy()
+    def __insert_in_text_box_tab2(self, message):
+        self.__text_box_tab2.config(state=tk.NORMAL)
+        self.__text_box_tab2.insert(index='end', chars=message + '\n')
+        self.__text_box_tab2.config(state=tk.DISABLED)
 
     def __state_tab1(self, state):
         self.__send_button.config(state=state)
+        self.__message_entry.config(state=state)
         self.__disconnect_button.config(state=state)
-        self.__destroy_channel.config(state=state)
+        self.__destroy_button.config(state=state)
 
     def __state_tab2(self, state):
         self.__ip_entry.config(state=state)
@@ -207,20 +241,6 @@ class ClientGui(tk.Tk):
     def __state_tab3(self, state):
         self.__fetch_button.config(state=state)
         self.__list_box.delete(0, tk.END)
-
-    def __fetch_connections(self):
-        self.__list_box.delete(0, tk.END)
-        self.__tcp_client.send(b'__fetch_connections__')
-        active_connections = self.__tcp_client.recv(1024)
-        if active_connections == b'No active connections':
-            messagebox.showinfo("", "No active connections")
-            return
-        active_connections = active_connections.decode('utf-8').split()
-        for connection in active_connections:
-            self.__list_box.insert(tk.END, connection)
-
-    def __build_channel(self, event):
-        messagebox.showinfo("", "It is working")
 
 
 def main():

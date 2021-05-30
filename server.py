@@ -1,13 +1,14 @@
-import time
 import socket
 import threading
+import random
 
 
 class Server:
     def __init__(self, ip, port):
         self.__ip = ip
         self.__port = port
-        self.__all_client = []
+        self.__all_client: dict[int, socket.socket] = {}
+        self.__current_channels: list[list] = []
 
         self.__server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__server.bind((self.__ip, self.__port))
@@ -18,40 +19,58 @@ class Server:
     def __connect_handler(self):
         while True:
             client, address = self.__server.accept()
-            if client not in self.__all_client:
-                self.__all_client.append(client)
-                threading.Thread(target=self.__message_handler, args=(client,)).start()
+            if client not in self.__all_client.values():
+                while True:
+                    client_id = random.randint(1000000000, 9999999999)
+                    if client_id not in self.__all_client.keys():
+                        self.__all_client[client_id] = client
+                        break
+                threading.Thread(target=self.__message_handler, args=(client, client_id)).start()
                 client.send(b'Successful chat connecting!')
-            time.sleep(1)
 
-    def __message_handler(self, client_socket):
+    def __message_handler(self, client_socket, client_id):
         while True:
             message: bytes = client_socket.recv(1024)
             print(message)
 
             if message == b'__exit_command__':
-                self.__all_client.remove(client_socket)
+                self.__all_client.pop(client_id)
                 break
             if message == b'__fetch_connections__':
                 self.__fetch_connections(client_socket)
                 continue
+            if message == b'__build_channel__':
+                self.__build_channel(client_socket, client_id)
+                continue
 
-            for client in self.__all_client:
-                if client != client_socket:
-                    client.send(message)
-                else:
-                    client.send(b'(You) ' + message)
-            time.sleep(1)
+            message_arr = message.decode('utf-8').split('\n')
+            destination_id = message_arr[0]
+
+            client_socket.send(b'(You) ' + bytes(message_arr[1], 'utf-8'))
+            self.__all_client[int(destination_id)].send(bytes(message_arr[1], 'utf-8'))
 
     def __fetch_connections(self, client_socket: socket.socket):
-        active_connections = bytes(' ', encoding='utf-8')
+        active_connections = b''
         if len(self.__all_client) == 1:
-            client_socket.send(bytes('No active connections', encoding='utf-8'))
+            client_socket.send(b'__no_active_connections__')
             return
-        for client in self.__all_client:
-            if client != client_socket:
-                active_connections += bytes(str(self.__all_client.index(client)) + ' ', encoding='utf-8')
+        client_socket.send(b'__all_connections__')
+        for client_id in self.__all_client.keys():
+            if self.__all_client[client_id] != client_socket:
+                active_connections += bytes(str(client_id) + ' ', encoding='utf-8')
         client_socket.send(active_connections)
+
+    def __build_channel(self, client_socket, client_id: int):
+        connect_to = int(client_socket.recv(1024).decode('utf-8'))
+        for channel in self.__current_channels:
+            if client_id in channel or connect_to in channel:
+                client_socket.send(b'__build_failed__')
+                return
+        client_socket.send(b'__channel_established__')
+        client_socket.send(bytes(str(connect_to), 'utf-8'))
+        self.__all_client[connect_to].send(b'__channel_established__')
+        self.__all_client[connect_to].send(bytes(str(client_id), 'utf-8'))
+        self.__current_channels.append([client_id, connect_to])
 
 
 def main():
