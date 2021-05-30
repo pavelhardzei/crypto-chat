@@ -170,6 +170,12 @@ class ClientGui(tk.Tk):
                 if message == b'__build_failed__':
                     messagebox.showinfo("", "Can't build channel")
                     continue
+                if message == b'__channel_destroyed__':
+                    self.__interlocutor_id = b''
+                    self.__state_tab1(tk.DISABLED)
+                    self.__state_tab3(tk.NORMAL)
+                    self.__disconnect_button.config(state=tk.NORMAL)
+                    continue
 
                 self.__text_box_tab1.config(state=tk.NORMAL)
                 self.__text_box_tab1.insert(index='end', chars=message.decode('utf-8') + '\n')
@@ -199,10 +205,12 @@ class ClientGui(tk.Tk):
             self.__logger.error(e)
 
     def __destroy_channel(self):
-        pass
+        self.__tcp_client.send(b'__destroy_channel__')
 
     def __disconnect(self):
         try:
+            self.__destroy_channel()
+
             self.__tcp_client.send(b'__exit_command__')
             self.__is_connected = False
             self.__tcp_client.close()
