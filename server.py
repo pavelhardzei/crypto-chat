@@ -65,6 +65,9 @@ class Server:
 
     def __build_channel(self, client_socket, client_id: int):
         connect_to = int(client_socket.recv(1024).decode('utf-8'))
+        if connect_to not in self.__all_clients.keys():
+            client_socket.send(b'__build_failed__')
+            return
         for channel in self.__current_channels:
             if client_id in channel or connect_to in channel:
                 client_socket.send(b'__build_failed__')

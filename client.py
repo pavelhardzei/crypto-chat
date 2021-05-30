@@ -120,6 +120,8 @@ class ClientGui(tk.Tk):
         self.__logger = logging.getLogger()
         self.__logger.setLevel(logging.DEBUG)
 
+        self.__interlocutor_id: bytes = b''
+
     def __connect_handler(self):
         try:
             if self.__ip_entry.get().strip() == "" or self.__port_entry.get().strip() == "":
@@ -171,6 +173,7 @@ class ClientGui(tk.Tk):
                     messagebox.showinfo("", "Can't build channel")
                     continue
                 if message == b'__channel_destroyed__':
+                    self.__insert_in_text_box_tab2("Channel is broken")
                     self.__interlocutor_id = b''
                     self.__state_tab1(tk.DISABLED)
                     self.__state_tab3(tk.NORMAL)
@@ -209,7 +212,9 @@ class ClientGui(tk.Tk):
 
     def __disconnect(self):
         try:
-            self.__destroy_channel()
+            if self.__interlocutor_id != b'':
+                messagebox.showinfo("Error", "Destroy channel")
+                return
 
             self.__tcp_client.send(b'__exit_command__')
             self.__is_connected = False
@@ -218,10 +223,14 @@ class ClientGui(tk.Tk):
             self.__state_tab1(tk.DISABLED)
             self.__state_tab2(tk.NORMAL)
             self.__state_tab3(tk.DISABLED)
+            self.__insert_in_text_box_tab2("You are disconnected")
         except Exception as e:
             self.__logger.error(e)
 
     def __close_window(self):
+        if self.__interlocutor_id != b'':
+            messagebox.showinfo("Error", "Destroy channel")
+            return
         self.__disconnect()
         self.destroy()
 
