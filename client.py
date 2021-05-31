@@ -130,6 +130,8 @@ class ClientGui(tk.Tk):
         self.__generated_random = 0
         self.__my_id = 0
 
+        self.__connected_to_id = 0
+
     def __connect_handler(self):
         try:
             if self.__ip_entry.get().strip() == "" or self.__port_entry.get().strip() == "":
@@ -166,8 +168,8 @@ class ClientGui(tk.Tk):
                 message = self.__tcp_client.recv(1024)
 
                 if message == b'__channel_established__':
-                    self.__interlocutor_id = int(self.__tcp_client.recv(1024).decode('utf-8'))
-                    self.__insert_in_text_box_tab2("You connected to " + str(self.__interlocutor_id))
+                    self.__connected_to_id = int(self.__tcp_client.recv(1024).decode('utf-8'))
+                    self.__insert_in_text_box_tab2("You connected to " + str(self.__connected_to_id))
                     self.__state_tab1(tk.NORMAL)
                     continue
                 if message == b'__no_active_connections__':
@@ -183,7 +185,7 @@ class ClientGui(tk.Tk):
                     continue
                 if message == b'__channel_destroyed__':
                     self.__insert_in_text_box_tab2("Channel is broken")
-                    self.__interlocutor_id = 0
+                    self.__connected_to_id = 0
                     self.__state_tab1(tk.DISABLED)
                     self.__state_tab3(tk.NORMAL)
                     self.__disconnect_button.config(state=tk.NORMAL)
@@ -203,7 +205,7 @@ class ClientGui(tk.Tk):
             if self.__message_var.get().strip() == "":
                 return
             self.__tcp_client.send(b'__send__message__')
-            self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' +
+            self.__tcp_client.send(bytes(str(self.__connected_to_id), encoding='utf-8') + b'\n' +
                                    bytes(self.__message_var.get(), encoding="utf-8"))
             self.__message_var.set("")
         except Exception as e:
@@ -251,8 +253,7 @@ class ClientGui(tk.Tk):
             check_id = decrypted & 0xffffffffffffffff
             if check_id != self.__interlocutor_id:
                 self.__tcp_client.send(b'__authentication_failed__')
-                self.__tcp_client.send(bytes(str(self.__interlocutor_id)))
-                self.__interlocutor_id = 0
+                self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8'))
                 return
             print(check_id == self.__interlocutor_id)
             self.__generated_random = random.randint(2 ** 63, 2 ** 64 - 1)
@@ -267,8 +268,7 @@ class ClientGui(tk.Tk):
             check_random = decrypted >> 64
             if check_random != self.__generated_random:
                 self.__tcp_client.send(b'__authentication_failed__')
-                self.__tcp_client.send(bytes(str(self.__my_id)))
-                self.__interlocutor_id = 0
+                self.__tcp_client.send(bytes(str(self.__my_id), encoding='utf-8'))
                 return
             print(check_random == self.__generated_random)
             encrypted = RSA.encrypt(decrypted & 0xffffffffffffffff, self.__interlocutor_open_key)
@@ -280,8 +280,7 @@ class ClientGui(tk.Tk):
             decrypted = RSA.decrypt(to_check, self.__my_private_key)
             if decrypted != self.__generated_random:
                 self.__tcp_client.send(b'__authentication_failed__')
-                self.__tcp_client.send(bytes(str(self.__interlocutor_id)))
-                self.__interlocutor_id = 0
+                self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8'))
                 return
             print(decrypted == self.__generated_random)
             self.__tcp_client.send(b'__authentication_success__')
@@ -292,7 +291,7 @@ class ClientGui(tk.Tk):
 
     def __disconnect(self):
         try:
-            if self.__interlocutor_id != 0:
+            if self.__connected_to_id != 0:
                 messagebox.showinfo("Error", "Destroy channel")
                 return
 
@@ -308,7 +307,7 @@ class ClientGui(tk.Tk):
             self.__logger.error(e)
 
     def __close_window(self):
-        if self.__interlocutor_id != 0:
+        if self.__connected_to_id != 0:
             messagebox.showinfo("Error", "Destroy channel")
             return
         self.__disconnect()
