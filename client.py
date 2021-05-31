@@ -202,6 +202,7 @@ class ClientGui(tk.Tk):
         try:
             if self.__message_var.get().strip() == "":
                 return
+            self.__tcp_client.send(b'__send__message__')
             self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' +
                                    bytes(self.__message_var.get(), encoding="utf-8"))
             self.__message_var.set("")

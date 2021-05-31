@@ -39,25 +39,22 @@ class Server:
                 break
             if message == b'__fetch_connections__':
                 self.__fetch_connections(client_socket)
-                continue
-            if message == b'__build_channel__':
+            elif message == b'__build_channel__':
                 self.__build_channel(client_socket, client_id)
-                continue
-            if message == b'__destroy_channel__':
+            elif message == b'__destroy_channel__':
                 self.__destroy_channel(client_socket, client_id)
-                continue
-            if message == b'__authentication__':
+            elif message == b'__authentication__':
                 self.__authentication(client_socket)
-                continue
-            if message == b'__authentication_success__':
+            elif message == b'__authentication_success__':
                 self.__authentication_success(client_socket, client_id)
-                continue
+            elif message == b'__send__message__':
+                self.__send_message(client_socket)
 
-            message_arr = message.decode('utf-8').split('\n')
-            destination_id = message_arr[0]
-
-            client_socket.send(b'(You) ' + bytes(message_arr[1], 'utf-8'))
-            self.__all_clients[int(destination_id)].send(bytes(message_arr[1], 'utf-8'))
+    def __send_message(self, client_socket):
+        message_arr = client_socket.recv(1024).decode('utf-8').split('\n')
+        destination_id = message_arr[0]
+        client_socket.send(b'(You) ' + bytes(message_arr[1], 'utf-8'))
+        self.__all_clients[int(destination_id)].send(bytes(message_arr[1], 'utf-8'))
 
     def __fetch_connections(self, client_socket: socket.socket):
         active_connections = b''
