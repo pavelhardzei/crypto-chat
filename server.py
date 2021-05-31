@@ -21,12 +21,13 @@ class Server:
             client, address = self.__server.accept()
             if client not in self.__all_clients.values():
                 while True:
-                    client_id = random.randint(2 ** 127, 2 ** 128 - 1)
+                    client_id = random.randint(2 ** 63, 2 ** 64 - 1)
                     if client_id not in self.__all_clients.keys():
                         self.__all_clients[client_id] = client
                         break
                 threading.Thread(target=self.__message_handler, args=(client, client_id)).start()
                 client.send(b'Successful chat connecting!')
+                client.send(bytes(str(client_id), encoding='utf-8'))
 
     def __message_handler(self, client_socket, client_id):
         while True:
@@ -44,6 +45,12 @@ class Server:
                 continue
             if message == b'__destroy_channel__':
                 self.__destroy_channel(client_socket, client_id)
+                continue
+            if message == b'__authentication__':
+                self.__authentication(client_socket)
+                continue
+            if message == b'__authentication_success__':
+                self.__authentication_success(client_socket, client_id)
                 continue
 
             message_arr = message.decode('utf-8').split('\n')
@@ -65,6 +72,8 @@ class Server:
 
     def __build_channel(self, client_socket, client_id: int):
         connect_to = int(client_socket.recv(1024).decode('utf-8'))
+        open_key = [client_socket.recv(1024),
+                    client_socket.recv(1024)]
         if connect_to not in self.__all_clients.keys():
             client_socket.send(b'__build_failed__')
             return
@@ -72,11 +81,28 @@ class Server:
             if client_id in channel or connect_to in channel:
                 client_socket.send(b'__build_failed__')
                 return
+        self.__all_clients[connect_to].send(b'__authentication__')
+        self.__all_clients[connect_to].send(b'0')
+        self.__all_clients[connect_to].send(bytes(str(client_id), encoding='utf-8'))
+        self.__all_clients[connect_to].send(open_key[0])
+        self.__all_clients[connect_to].send(open_key[1])
+
+    def __authentication_success(self, client_socket, client_id):
+        connect_to = int(client_socket.recv(1024).decode('utf-8'))
         client_socket.send(b'__channel_established__')
         client_socket.send(bytes(str(connect_to), 'utf-8'))
         self.__all_clients[connect_to].send(b'__channel_established__')
         self.__all_clients[connect_to].send(bytes(str(client_id), 'utf-8'))
         self.__current_channels.append([client_id, connect_to])
+
+    def __authentication(self, client_socket: socket.socket):
+        message = client_socket.recv(1024).decode('utf-8').split('\n')
+        interlocutor_id = message.pop(0)
+        state = message.pop(0)
+
+        self.__all_clients[int(interlocutor_id)].send(b'__authentication__')
+        self.__all_clients[int(interlocutor_id)].send(bytes(state, encoding='utf-8'))
+        self.__all_clients[int(interlocutor_id)].send(b'\n'.join([bytes(x, encoding='utf-8') for x in message]))
 
     def __destroy_channel(self, client_socket, client_id):
         for channel in self.__current_channels:

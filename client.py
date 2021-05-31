@@ -1,3 +1,4 @@
+import random
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
@@ -5,6 +6,7 @@ from tkinter import font as tkfont
 import socket
 import threading
 import logging
+from rsa import RSA
 
 
 class ClientGui(tk.Tk):
@@ -120,7 +122,13 @@ class ClientGui(tk.Tk):
         self.__logger = logging.getLogger()
         self.__logger.setLevel(logging.DEBUG)
 
-        self.__interlocutor_id: bytes = b''
+        # for authentication
+        self.__my_open_key, self.__my_private_key = RSA.generate_keys(256)
+        self.__interlocutor_id = 0
+        self.__interlocutor_open_key: tuple = ()
+
+        self.__generated_random = 0
+        self.__my_id = 0
 
     def __connect_handler(self):
         try:
@@ -136,6 +144,7 @@ class ClientGui(tk.Tk):
             message = self.__tcp_client.recv(1024)
             self.__text_box_tab2.delete('1.0', tk.END)
             self.__insert_in_text_box_tab2(message.decode('utf-8'))
+            self.__my_id = int(self.__tcp_client.recv(1024).decode('utf-8'))
 
             self.__ip_entry.delete(0, tk.END)
             self.__port_entry.delete(0, tk.END)
@@ -157,8 +166,8 @@ class ClientGui(tk.Tk):
                 message = self.__tcp_client.recv(1024)
 
                 if message == b'__channel_established__':
-                    self.__interlocutor_id = self.__tcp_client.recv(1024)
-                    self.__insert_in_text_box_tab2("You connected to " + self.__interlocutor_id.decode('utf-8'))
+                    self.__interlocutor_id = int(self.__tcp_client.recv(1024).decode('utf-8'))
+                    self.__insert_in_text_box_tab2("You connected to " + str(self.__interlocutor_id))
                     self.__state_tab1(tk.NORMAL)
                     continue
                 if message == b'__no_active_connections__':
@@ -174,10 +183,13 @@ class ClientGui(tk.Tk):
                     continue
                 if message == b'__channel_destroyed__':
                     self.__insert_in_text_box_tab2("Channel is broken")
-                    self.__interlocutor_id = b''
+                    self.__interlocutor_id = 0
                     self.__state_tab1(tk.DISABLED)
                     self.__state_tab3(tk.NORMAL)
                     self.__disconnect_button.config(state=tk.NORMAL)
+                    continue
+                if message == b'__authentication__':
+                    self.__authentication()
                     continue
 
                 self.__text_box_tab1.config(state=tk.NORMAL)
@@ -190,7 +202,8 @@ class ClientGui(tk.Tk):
         try:
             if self.__message_var.get().strip() == "":
                 return
-            self.__tcp_client.send(self.__interlocutor_id + b'\n' + bytes(self.__message_var.get(), encoding="utf-8"))
+            self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' +
+                                   bytes(self.__message_var.get(), encoding="utf-8"))
             self.__message_var.set("")
         except Exception as e:
             self.__logger.error(e)
@@ -203,16 +216,67 @@ class ClientGui(tk.Tk):
         try:
             selection = self.__list_box.curselection()[0]
             self.__tcp_client.send(b'__build_channel__')
-            self.__tcp_client.send(bytes(self.__list_box.get(selection), 'utf-8'))
+            self.__tcp_client.send(bytes(self.__list_box.get(selection), encoding='utf-8'))
+
+            self.__tcp_client.send(bytes(str(self.__my_open_key[0]), encoding='utf-8'))
+            self.__tcp_client.send(bytes(str(self.__my_open_key[1]), encoding='utf-8'))
         except Exception as e:
             self.__logger.error(e)
+
+    def __authentication(self):
+        state = self.__tcp_client.recv(1024)
+        if state == b'0':
+            self.__interlocutor_id = int(self.__tcp_client.recv(1024).decode('utf=8'))
+            self.__interlocutor_open_key = (int(self.__tcp_client.recv(1024).decode('utf-8')),
+                                            int(self.__tcp_client.recv(1024).decode('utf-8')))
+            self.__tcp_client.send(b'__authentication__')
+            self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'1' + b'\n' +
+                                   bytes(str(self.__my_id), encoding='utf-8') + b'\n' +
+                                   bytes(str(self.__my_open_key[0]), encoding='utf-8') + b'\n' +
+                                   bytes(str(self.__my_open_key[1]), encoding='utf-8'))
+        elif state == b'1':
+            message = self.__tcp_client.recv(1024).decode('utf-8').split('\n')
+            self.__interlocutor_id = int(message[0])
+            self.__interlocutor_open_key = (int(message[1]), int(message[2]))
+            self.__generated_random = random.randint(2 ** 63, 2 ** 64 - 1)
+            encrypted = RSA.encrypt((self.__generated_random << 64) | self.__my_id,
+                                    self.__interlocutor_open_key)
+            self.__tcp_client.send(b'__authentication__')
+            self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'2' + b'\n' +
+                                   bytes(str(encrypted), encoding='utf-8'))
+        elif state == b'2':
+            to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
+            decrypted = RSA.decrypt(to_check, self.__my_private_key)
+            check_id = decrypted & 0xffffffffffffffff
+            print(check_id == self.__interlocutor_id)
+            self.__generated_random = random.randint(2 ** 63, 2 ** 64 - 1)
+            encrypted = RSA.encrypt(((decrypted >> 64) << 64) | self.__generated_random,
+                                    self.__interlocutor_open_key)
+            self.__tcp_client.send(b'__authentication__')
+            self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'3' + b'\n' +
+                                   bytes(str(encrypted), encoding='utf-8'))
+        elif state == b'3':
+            to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
+            decrypted = RSA.decrypt(to_check, self.__my_private_key)
+            check_random = decrypted >> 64
+            print(check_random == self.__generated_random)
+            encrypted = RSA.encrypt(decrypted & 0xffffffffffffffff, self.__interlocutor_open_key)
+            self.__tcp_client.send(b'__authentication__')
+            self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'4' + b'\n' +
+                                   bytes(str(encrypted), encoding='utf-8'))
+        elif state == b'4':
+            to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
+            decrypted = RSA.decrypt(to_check, self.__my_private_key)
+            print(decrypted == self.__generated_random)
+            self.__tcp_client.send(b'__authentication_success__')
+            self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8'))
 
     def __destroy_channel(self):
         self.__tcp_client.send(b'__destroy_channel__')
 
     def __disconnect(self):
         try:
-            if self.__interlocutor_id != b'':
+            if self.__interlocutor_id != 0:
                 messagebox.showinfo("Error", "Destroy channel")
                 return
 
@@ -228,7 +292,7 @@ class ClientGui(tk.Tk):
             self.__logger.error(e)
 
     def __close_window(self):
-        if self.__interlocutor_id != b'':
+        if self.__interlocutor_id != 0:
             messagebox.showinfo("Error", "Destroy channel")
             return
         self.__disconnect()
