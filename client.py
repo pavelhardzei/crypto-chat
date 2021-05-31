@@ -249,6 +249,11 @@ class ClientGui(tk.Tk):
             to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
             decrypted = RSA.decrypt(to_check, self.__my_private_key)
             check_id = decrypted & 0xffffffffffffffff
+            if check_id != self.__interlocutor_id:
+                self.__tcp_client.send(b'__authentication_failed__')
+                self.__tcp_client.send(bytes(str(self.__interlocutor_id)))
+                self.__interlocutor_id = 0
+                return
             print(check_id == self.__interlocutor_id)
             self.__generated_random = random.randint(2 ** 63, 2 ** 64 - 1)
             encrypted = RSA.encrypt(((decrypted >> 64) << 64) | self.__generated_random,
@@ -260,6 +265,11 @@ class ClientGui(tk.Tk):
             to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
             decrypted = RSA.decrypt(to_check, self.__my_private_key)
             check_random = decrypted >> 64
+            if check_random != self.__generated_random:
+                self.__tcp_client.send(b'__authentication_failed__')
+                self.__tcp_client.send(bytes(str(self.__my_id)))
+                self.__interlocutor_id = 0
+                return
             print(check_random == self.__generated_random)
             encrypted = RSA.encrypt(decrypted & 0xffffffffffffffff, self.__interlocutor_open_key)
             self.__tcp_client.send(b'__authentication__')
@@ -268,6 +278,11 @@ class ClientGui(tk.Tk):
         elif state == b'4':
             to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
             decrypted = RSA.decrypt(to_check, self.__my_private_key)
+            if decrypted != self.__generated_random:
+                self.__tcp_client.send(b'__authentication_failed__')
+                self.__tcp_client.send(bytes(str(self.__interlocutor_id)))
+                self.__interlocutor_id = 0
+                return
             print(decrypted == self.__generated_random)
             self.__tcp_client.send(b'__authentication_success__')
             self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8'))

@@ -47,6 +47,8 @@ class Server:
                 self.__authentication(client_socket)
             elif message == b'__authentication_success__':
                 self.__authentication_success(client_socket, client_id)
+            elif message == b'__authentication_failed__':
+                self.__authentication_failed(client_socket)
             elif message == b'__send__message__':
                 self.__send_message(client_socket)
 
@@ -91,6 +93,10 @@ class Server:
         self.__all_clients[connect_to].send(b'__channel_established__')
         self.__all_clients[connect_to].send(bytes(str(client_id), 'utf-8'))
         self.__current_channels.append([client_id, connect_to])
+
+    def __authentication_failed(self, client_socket):
+        connect_to = int(client_socket.recv(1024).decode('utf-8'))
+        self.__all_clients[connect_to].send(b'__build_failed__')
 
     def __authentication(self, client_socket: socket.socket):
         message = client_socket.recv(1024).decode('utf-8').split('\n')
