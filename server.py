@@ -21,7 +21,7 @@ class Server:
             client, address = self.__server.accept()
             if client not in self.__all_clients.values():
                 while True:
-                    client_id = random.randint(1000000000, 9999999999)
+                    client_id = random.randint(2 ** 127, 2 ** 128 - 1)
                     if client_id not in self.__all_clients.keys():
                         self.__all_clients[client_id] = client
                         break
