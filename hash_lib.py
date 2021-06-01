@@ -123,7 +123,6 @@ def hash_des(message: bytes):
         size = len(message) // 8
     for i in range(size):
         plain_text.append(message[i * 8:(i + 1)*8])
-    print(plain_text)
     return b''.join(des(plain_text))
 
 
