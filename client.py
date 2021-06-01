@@ -171,32 +171,27 @@ class ClientGui(tk.Tk):
                     self.__connected_to_id = int(self.__tcp_client.recv(1024).decode('utf-8'))
                     self.__insert_in_text_box_tab2("You connected to " + str(self.__connected_to_id))
                     self.__state_tab1(tk.NORMAL)
-                    continue
-                if message == b'__no_active_connections__':
+                elif message == b'__no_active_connections__':
                     messagebox.showinfo("", "No active connections")
-                    continue
-                if message == b'__all_connections__':
+                elif message == b'__all_connections__':
                     message = self.__tcp_client.recv(1024).decode('utf-8').split()
                     for connection in message:
                         self.__list_box.insert(tk.END, connection)
-                    continue
-                if message == b'__build_failed__':
+                elif message == b'__build_failed__':
                     messagebox.showinfo("", "Can't build channel")
-                    continue
-                if message == b'__channel_destroyed__':
+                elif message == b'__channel_destroyed__':
                     self.__insert_in_text_box_tab2("Channel is broken")
                     self.__connected_to_id = 0
                     self.__state_tab1(tk.DISABLED)
                     self.__state_tab3(tk.NORMAL)
                     self.__disconnect_button.config(state=tk.NORMAL)
-                    continue
-                if message == b'__authentication__':
+                elif message == b'__authentication__':
                     self.__authentication()
-                    continue
-
-                self.__text_box_tab1.config(state=tk.NORMAL)
-                self.__text_box_tab1.insert(index='end', chars=message.decode('utf-8') + '\n')
-                self.__text_box_tab1.config(state=tk.DISABLED)
+                elif message == b'__send_message__':
+                    message = self.__tcp_client.recv(1024)
+                    self.__text_box_tab1.config(state=tk.NORMAL)
+                    self.__text_box_tab1.insert(index='end', chars=message.decode('utf-8') + '\n')
+                    self.__text_box_tab1.config(state=tk.DISABLED)
             except Exception as e:
                 self.__logger.error(e)
 

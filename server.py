@@ -55,7 +55,9 @@ class Server:
     def __send_message(self, client_socket):
         message_arr = client_socket.recv(1024).decode('utf-8').split('\n')
         destination_id = message_arr[0]
+        client_socket.send(b'__send_message__')
         client_socket.send(b'(You) ' + bytes(message_arr[1], 'utf-8'))
+        self.__all_clients[int(destination_id)].send(b'__send_message__')
         self.__all_clients[int(destination_id)].send(bytes(message_arr[1], 'utf-8'))
 
     def __fetch_connections(self, client_socket: socket.socket):
