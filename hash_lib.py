@@ -1,5 +1,4 @@
 from resources import EXPANSION, SBOX, PERMUTATION_TABLE, PC1, PC2, round_shifts
-import random
 
 
 def apply_PC1(pc1_table: list[int], keys_64bits: int) -> int:
@@ -102,7 +101,7 @@ def encrypt(encrypting_block: int, sub_keys: list[int]) -> int:
 
 def des(plain_text: list[bytes], flag: bool = False) -> list[bytes]:
     while len(plain_text[-1]) != 8:
-        plain_text[-1] += random.randint(0, 255).to_bytes(1, 'big')
+        plain_text[-1] += b'0'
 
     key = b'gooddays'
     sub_keys = generate_keys(int.from_bytes(key, 'big'), round_shifts)
@@ -129,8 +128,8 @@ def hash_des(message: bytes):
 
 
 def main():
-    encrypted = des([b'helltome', b'12345678'])
-    print("Encrypting message: {}".format([b'helltome']))
+    encrypted = des([b'helltome', b'123456'])
+    print("Encrypting message: {}".format([b'helltome', b'123456']))
     print("After encrypting: {}".format(encrypted))
 
     decrypted = des(encrypted, True)
@@ -140,4 +139,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    print(hash_des(b'helltome12345678'))
+    print(hash_des(b'helltome123456'))
