@@ -31,7 +31,7 @@ class Server:
 
     def __message_handler(self, client_socket, client_id):
         while True:
-            message: bytes = client_socket.recv(1024)
+            message: bytes = client_socket.recv(4096)
             print(message)
 
             if message == b'__exit_command__':
@@ -53,12 +53,14 @@ class Server:
                 self.__send_message(client_socket)
 
     def __send_message(self, client_socket):
-        message_arr = client_socket.recv(1024).decode('utf-8').split('\n')
+        message_arr = client_socket.recv(4096).decode('utf-8').split('\n')
         destination_id = message_arr[0]
         client_socket.send(b'__send_message__')
         client_socket.send(b'(You) ' + bytes(message_arr[1], 'utf-8'))
-        self.__all_clients[int(destination_id)].send(b'__send_message__')
-        self.__all_clients[int(destination_id)].send(bytes(message_arr[1], 'utf-8'))
+        self.__all_clients[int(destination_id)].send(b'__check_signature__')
+        self.__all_clients[int(destination_id)].send(bytes(message_arr[1], 'utf-8') + b'\n' +
+                                                     bytes(message_arr[2], 'utf-8') + b'\n' +
+                                                     bytes(message_arr[3], 'utf-8'))
 
     def __fetch_connections(self, client_socket: socket.socket):
         active_connections = b''
@@ -72,9 +74,12 @@ class Server:
         client_socket.send(active_connections)
 
     def __build_channel(self, client_socket, client_id: int):
-        connect_to = int(client_socket.recv(1024).decode('utf-8'))
-        open_key = [client_socket.recv(1024),
-                    client_socket.recv(1024)]
+        connect_to = int(client_socket.recv(4096).decode('utf-8'))
+        open_key = [client_socket.recv(4096),
+                    client_socket.recv(4096)]
+        elgamal_open_key = [client_socket.recv(4096),
+                            client_socket.recv(4096),
+                            client_socket.recv(4096)]
         if connect_to not in self.__all_clients.keys():
             client_socket.send(b'__build_failed__')
             return
@@ -87,9 +92,12 @@ class Server:
         self.__all_clients[connect_to].send(bytes(str(client_id), encoding='utf-8'))
         self.__all_clients[connect_to].send(open_key[0])
         self.__all_clients[connect_to].send(open_key[1])
+        self.__all_clients[connect_to].send(elgamal_open_key[0])
+        self.__all_clients[connect_to].send(elgamal_open_key[1])
+        self.__all_clients[connect_to].send(elgamal_open_key[2])
 
     def __authentication_success(self, client_socket, client_id):
-        connect_to = int(client_socket.recv(1024).decode('utf-8'))
+        connect_to = int(client_socket.recv(4096).decode('utf-8'))
         client_socket.send(b'__channel_established__')
         client_socket.send(bytes(str(connect_to), 'utf-8'))
         self.__all_clients[connect_to].send(b'__channel_established__')
@@ -97,11 +105,11 @@ class Server:
         self.__current_channels.append([client_id, connect_to])
 
     def __authentication_failed(self, client_socket):
-        connect_to = int(client_socket.recv(1024).decode('utf-8'))
+        connect_to = int(client_socket.recv(4096).decode('utf-8'))
         self.__all_clients[connect_to].send(b'__build_failed__')
 
     def __authentication(self, client_socket: socket.socket):
-        message = client_socket.recv(1024).decode('utf-8').split('\n')
+        message = client_socket.recv(4096).decode('utf-8').split('\n')
         interlocutor_id = message.pop(0)
         state = message.pop(0)
 

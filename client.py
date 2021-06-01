@@ -7,6 +7,7 @@ import socket
 import threading
 import logging
 from rsa import RSA
+from elgamal import ElGamal
 
 
 class ClientGui(tk.Tk):
@@ -124,8 +125,10 @@ class ClientGui(tk.Tk):
 
         # for authentication
         self.__my_open_key, self.__my_private_key = RSA.generate_keys(256)
+        self.__elgamal_open_key, self.__elgamal_private_key = ElGamal.generate_keys(256)
         self.__interlocutor_id = 0
         self.__interlocutor_open_key: tuple = ()
+        self.__interlocutor_elgamal_open_key: tuple = ()
 
         self.__generated_random = 0
         self.__my_id = 0
@@ -143,10 +146,10 @@ class ClientGui(tk.Tk):
             self.__tcp_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__tcp_client.connect((self.__ip, self.__port))
 
-            message = self.__tcp_client.recv(1024)
+            message = self.__tcp_client.recv(4096)
             self.__text_box_tab2.delete('1.0', tk.END)
             self.__insert_in_text_box_tab2(message.decode('utf-8'))
-            self.__my_id = int(self.__tcp_client.recv(1024).decode('utf-8'))
+            self.__my_id = int(self.__tcp_client.recv(4096).decode('utf-8'))
 
             self.__ip_entry.delete(0, tk.END)
             self.__port_entry.delete(0, tk.END)
@@ -165,16 +168,16 @@ class ClientGui(tk.Tk):
     def __monitor_message(self):
         while self.__is_connected:
             try:
-                message = self.__tcp_client.recv(1024)
+                message = self.__tcp_client.recv(4096)
 
                 if message == b'__channel_established__':
-                    self.__connected_to_id = int(self.__tcp_client.recv(1024).decode('utf-8'))
+                    self.__connected_to_id = int(self.__tcp_client.recv(4096).decode('utf-8'))
                     self.__insert_in_text_box_tab2("You connected to " + str(self.__connected_to_id))
                     self.__state_tab1(tk.NORMAL)
                 elif message == b'__no_active_connections__':
                     messagebox.showinfo("", "No active connections")
                 elif message == b'__all_connections__':
-                    message = self.__tcp_client.recv(1024).decode('utf-8').split()
+                    message = self.__tcp_client.recv(4096).decode('utf-8').split()
                     for connection in message:
                         self.__list_box.insert(tk.END, connection)
                 elif message == b'__build_failed__':
@@ -188,21 +191,36 @@ class ClientGui(tk.Tk):
                 elif message == b'__authentication__':
                     self.__authentication()
                 elif message == b'__send_message__':
-                    message = self.__tcp_client.recv(1024)
+                    message = self.__tcp_client.recv(4096)
                     self.__text_box_tab1.config(state=tk.NORMAL)
                     self.__text_box_tab1.insert(index='end', chars=message.decode('utf-8') + '\n')
                     self.__text_box_tab1.config(state=tk.DISABLED)
+                elif message == b'__check_signature__':
+                    message = self.__tcp_client.recv(4096).decode('utf-8').split('\n')
+                    self.__text_box_tab1.config(state=tk.NORMAL)
+                    self.__text_box_tab1.insert(index='end', chars=message[0] + '\n')
+                    self.__text_box_tab1.config(state=tk.DISABLED)
+
+                    signature = [int(message[1]),
+                                 int(message[2])]
+                    if not ElGamal.verification(message[0],
+                                                signature, self.__interlocutor_elgamal_open_key):
+                        messagebox.showinfo("", "Digital Signature failed")
             except Exception as e:
                 self.__logger.error(e)
 
     def __send_message(self):
         try:
-            if self.__message_var.get().strip() == "":
+            message = self.__message_var.get()
+            self.__message_var.set("")
+            if message.strip() == "":
                 return
             self.__tcp_client.send(b'__send__message__')
+            signature = ElGamal.subscribe(message, self.__elgamal_private_key)
             self.__tcp_client.send(bytes(str(self.__connected_to_id), encoding='utf-8') + b'\n' +
-                                   bytes(self.__message_var.get(), encoding="utf-8"))
-            self.__message_var.set("")
+                                   bytes(message, encoding='utf-8') + b'\n' +
+                                   bytes(str(signature[0]), encoding='utf-8') + b'\n' +
+                                   bytes(str(signature[1]), encoding='utf-8'))
         except Exception as e:
             self.__logger.error(e)
 
@@ -218,24 +236,35 @@ class ClientGui(tk.Tk):
 
             self.__tcp_client.send(bytes(str(self.__my_open_key[0]), encoding='utf-8'))
             self.__tcp_client.send(bytes(str(self.__my_open_key[1]), encoding='utf-8'))
+
+            self.__tcp_client.send(bytes(str(self.__elgamal_open_key[0]), encoding='utf-8'))
+            self.__tcp_client.send(bytes(str(self.__elgamal_open_key[1]), encoding='utf-8'))
+            self.__tcp_client.send(bytes(str(self.__elgamal_open_key[2]), encoding='utf-8'))
         except Exception as e:
             self.__logger.error(e)
 
     def __authentication(self):
-        state = self.__tcp_client.recv(1024)
+        state = self.__tcp_client.recv(4096)
         if state == b'0':
-            self.__interlocutor_id = int(self.__tcp_client.recv(1024).decode('utf=8'))
-            self.__interlocutor_open_key = (int(self.__tcp_client.recv(1024).decode('utf-8')),
-                                            int(self.__tcp_client.recv(1024).decode('utf-8')))
+            self.__interlocutor_id = int(self.__tcp_client.recv(4096).decode('utf=8'))
+            self.__interlocutor_open_key = (int(self.__tcp_client.recv(4096).decode('utf-8')),
+                                            int(self.__tcp_client.recv(4096).decode('utf-8')))
+            self.__interlocutor_elgamal_open_key = (int(self.__tcp_client.recv(4096).decode('utf-8')),
+                                                    int(self.__tcp_client.recv(4096).decode('utf-8')),
+                                                    int(self.__tcp_client.recv(4096).decode('utf-8')))
             self.__tcp_client.send(b'__authentication__')
             self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'1' + b'\n' +
                                    bytes(str(self.__my_id), encoding='utf-8') + b'\n' +
                                    bytes(str(self.__my_open_key[0]), encoding='utf-8') + b'\n' +
-                                   bytes(str(self.__my_open_key[1]), encoding='utf-8'))
+                                   bytes(str(self.__my_open_key[1]), encoding='utf-8') + b'\n' +
+                                   bytes(str(self.__elgamal_open_key[0]), encoding='utf-8') + b'\n' +
+                                   bytes(str(self.__elgamal_open_key[1]), encoding='utf-8') + b'\n' +
+                                   bytes(str(self.__elgamal_open_key[2]), encoding='utf-8'))
         elif state == b'1':
-            message = self.__tcp_client.recv(1024).decode('utf-8').split('\n')
+            message = self.__tcp_client.recv(4096).decode('utf-8').split('\n')
             self.__interlocutor_id = int(message[0])
             self.__interlocutor_open_key = (int(message[1]), int(message[2]))
+            self.__interlocutor_elgamal_open_key = (int(message[3]), int(message[4]), int(message[5]))
             self.__generated_random = random.randint(2 ** 63, 2 ** 64 - 1)
             encrypted = RSA.encrypt((self.__generated_random << 64) | self.__my_id,
                                     self.__interlocutor_open_key)
@@ -243,7 +272,7 @@ class ClientGui(tk.Tk):
             self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'2' + b'\n' +
                                    bytes(str(encrypted), encoding='utf-8'))
         elif state == b'2':
-            to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
+            to_check = int(self.__tcp_client.recv(4096).decode('utf-8').split('\n')[0])
             decrypted = RSA.decrypt(to_check, self.__my_private_key)
             check_id = decrypted & 0xffffffffffffffff
             if check_id != self.__interlocutor_id:
@@ -258,7 +287,7 @@ class ClientGui(tk.Tk):
             self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'3' + b'\n' +
                                    bytes(str(encrypted), encoding='utf-8'))
         elif state == b'3':
-            to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
+            to_check = int(self.__tcp_client.recv(4096).decode('utf-8').split('\n')[0])
             decrypted = RSA.decrypt(to_check, self.__my_private_key)
             check_random = decrypted >> 64
             if check_random != self.__generated_random:
@@ -271,7 +300,7 @@ class ClientGui(tk.Tk):
             self.__tcp_client.send(bytes(str(self.__interlocutor_id), encoding='utf-8') + b'\n' + b'4' + b'\n' +
                                    bytes(str(encrypted), encoding='utf-8'))
         elif state == b'4':
-            to_check = int(self.__tcp_client.recv(1024).decode('utf-8').split('\n')[0])
+            to_check = int(self.__tcp_client.recv(4096).decode('utf-8').split('\n')[0])
             decrypted = RSA.decrypt(to_check, self.__my_private_key)
             if decrypted != self.__generated_random:
                 self.__tcp_client.send(b'__authentication_failed__')
