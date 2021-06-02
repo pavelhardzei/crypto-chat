@@ -20,6 +20,8 @@ class ElGamal:
         r = ElGamal.__generate_r(private_key[0])
         a = ElGamal.__binpow(private_key[1], r, private_key[0])
         inverse_r = ElGamal.__gcd_extended(r, private_key[0] - 1)[1]
+        if inverse_r < 0:
+            inverse_r += (private_key[0] - 1)
         b = ((hashed - private_key[2] * a) * inverse_r) % (private_key[0] - 1)
         return a, b
 
