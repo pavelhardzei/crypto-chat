@@ -1,6 +1,7 @@
 import socket
 import threading
 import random
+import time
 
 
 class Server:
@@ -26,7 +27,7 @@ class Server:
                         self.__all_clients[client_id] = client
                         break
                 threading.Thread(target=self.__message_handler, args=(client, client_id)).start()
-                client.send(b'Successful chat connecting!')
+                client.send(b'Successful chat connecting!'); time.sleep(0.05)
                 client.send(bytes(str(client_id), encoding='utf-8'))
 
     def __message_handler(self, client_socket, client_id):
@@ -59,9 +60,9 @@ class Server:
     def __send_message(self, client_socket):
         message_arr = client_socket.recv(4096).decode('utf-8').split('\n')
         destination_id = message_arr[0]
-        client_socket.send(b'__send_message__')
+        client_socket.send(b'__send_message__'); time.sleep(0.05)
         client_socket.send(b'(You) ' + bytes(message_arr[1], 'utf-8'))
-        self.__all_clients[int(destination_id)].send(b'__check_signature__')
+        self.__all_clients[int(destination_id)].send(b'__check_signature__'); time.sleep(0.05)
         self.__all_clients[int(destination_id)].send(bytes(message_arr[1], 'utf-8') + b'\n' +
                                                      bytes(message_arr[2], 'utf-8') + b'\n' +
                                                      bytes(message_arr[3], 'utf-8'))
@@ -79,11 +80,7 @@ class Server:
 
     def __build_channel(self, client_socket, client_id: int):
         connect_to = int(client_socket.recv(4096).decode('utf-8'))
-        open_key = [client_socket.recv(4096),
-                    client_socket.recv(4096)]
-        elgamal_open_key = [client_socket.recv(4096),
-                            client_socket.recv(4096),
-                            client_socket.recv(4096)]
+        keys = client_socket.recv(4096)
         if connect_to not in self.__all_clients.keys():
             client_socket.send(b'__build_failed__')
             return
@@ -91,20 +88,16 @@ class Server:
             if client_id in channel or connect_to in channel:
                 client_socket.send(b'__build_failed__')
                 return
-        self.__all_clients[connect_to].send(b'__authentication__')
-        self.__all_clients[connect_to].send(b'0')
-        self.__all_clients[connect_to].send(bytes(str(client_id), encoding='utf-8'))
-        self.__all_clients[connect_to].send(open_key[0])
-        self.__all_clients[connect_to].send(open_key[1])
-        self.__all_clients[connect_to].send(elgamal_open_key[0])
-        self.__all_clients[connect_to].send(elgamal_open_key[1])
-        self.__all_clients[connect_to].send(elgamal_open_key[2])
+        self.__all_clients[connect_to].send(b'__authentication__'); time.sleep(0.05)
+        self.__all_clients[connect_to].send(b'0'); time.sleep(0.05)
+        self.__all_clients[connect_to].send(bytes(str(client_id), encoding='utf-8')); time.sleep(0.05)
+        self.__all_clients[connect_to].send(keys)
 
     def __authentication_success(self, client_socket, client_id):
         connect_to = int(client_socket.recv(4096).decode('utf-8'))
-        client_socket.send(b'__channel_established__')
+        client_socket.send(b'__channel_established__'); time.sleep(0.05)
         client_socket.send(bytes(str(connect_to), 'utf-8'))
-        self.__all_clients[connect_to].send(b'__channel_established__')
+        self.__all_clients[connect_to].send(b'__channel_established__'); time.sleep(0.05)
         self.__all_clients[connect_to].send(bytes(str(client_id), 'utf-8'))
         self.__current_channels.append([client_id, connect_to])
 
@@ -117,8 +110,8 @@ class Server:
         interlocutor_id = message.pop(0)
         state = message.pop(0)
 
-        self.__all_clients[int(interlocutor_id)].send(b'__authentication__')
-        self.__all_clients[int(interlocutor_id)].send(bytes(state, encoding='utf-8'))
+        self.__all_clients[int(interlocutor_id)].send(b'__authentication__'); time.sleep(0.05)
+        self.__all_clients[int(interlocutor_id)].send(bytes(state, encoding='utf-8')); time.sleep(0.05)
         self.__all_clients[int(interlocutor_id)].send(b'\n'.join([bytes(x, encoding='utf-8') for x in message]))
 
     def __destroy_channel(self, client_socket, client_id):
