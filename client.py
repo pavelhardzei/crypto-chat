@@ -191,20 +191,18 @@ class ClientGui(tk.Tk):
                     self.__disconnect_button.config(state=tk.NORMAL)
                 elif message == b'__authentication__':
                     self.__authentication()
-                elif message == b'__send_message__':
-                    message = self.__tcp_client.recv(4096)
-                    self.__text_box_tab1.config(state=tk.NORMAL)
-                    self.__text_box_tab1.insert(index='end', chars=message.decode('utf-8') + '\n')
-                    self.__text_box_tab1.config(state=tk.DISABLED)
                 elif message == b'__check_signature__':
                     message = self.__tcp_client.recv(4096).decode('utf-8').split('\n')
+                    byte_length = int(message[1])
+                    msg = RSA.decrypt(int(message[0]), self.__my_private_key).to_bytes(byte_length, 'big').decode()
+
                     self.__text_box_tab1.config(state=tk.NORMAL)
-                    self.__text_box_tab1.insert(index='end', chars=message[0] + '\n')
+                    self.__text_box_tab1.insert(index='end', chars=msg + '\n')
                     self.__text_box_tab1.config(state=tk.DISABLED)
 
-                    signature = [int(message[1]),
-                                 int(message[2])]
-                    if not ElGamal.verification(message[0],
+                    signature = [int(message[2]),
+                                 int(message[3])]
+                    if not ElGamal.verification(msg,
                                                 signature, self.__interlocutor_elgamal_open_key):
                         messagebox.showinfo("", "Digital Signature failed")
             except Exception as e:
@@ -217,9 +215,18 @@ class ClientGui(tk.Tk):
             if message.strip() == "":
                 return
             self.__tcp_client.send(b'__send__message__')
+
+            self.__text_box_tab1.config(state=tk.NORMAL)
+            self.__text_box_tab1.insert(index='end', chars="(You) " + message + '\n')
+            self.__text_box_tab1.config(state=tk.DISABLED)
+
             signature = ElGamal.subscribe(message, self.__elgamal_private_key)
+
+            byte_length = len(message)
+            message = int.from_bytes(message.encode('utf-8'), 'big')
             self.__tcp_client.send(bytes(str(self.__connected_to_id), encoding='utf-8') + b'\n' +
-                                   bytes(message, encoding='utf-8') + b'\n' +
+                                   str(RSA.encrypt(message, self.__interlocutor_open_key)).encode('utf-8') + b'\n' +
+                                   str(byte_length).encode('utf-8') + b'\n' +
                                    bytes(str(signature[0]), encoding='utf-8') + b'\n' +
                                    bytes(str(signature[1]), encoding='utf-8'))
         except Exception as e:

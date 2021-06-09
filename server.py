@@ -60,12 +60,12 @@ class Server:
     def __send_message(self, client_socket):
         message_arr = client_socket.recv(4096).decode('utf-8').split('\n')
         destination_id = message_arr[0]
-        client_socket.send(b'__send_message__'); time.sleep(0.05)
-        client_socket.send(b'(You) ' + bytes(message_arr[1], 'utf-8'))
+        print("Sent message: {}".format(message_arr[1]))
         self.__all_clients[int(destination_id)].send(b'__check_signature__'); time.sleep(0.05)
         self.__all_clients[int(destination_id)].send(bytes(message_arr[1], 'utf-8') + b'\n' +
                                                      bytes(message_arr[2], 'utf-8') + b'\n' +
-                                                     bytes(message_arr[3], 'utf-8'))
+                                                     bytes(message_arr[3], 'utf-8') + b'\n' +
+                                                     bytes(message_arr[4], 'utf-8'))
 
     def __fetch_connections(self, client_socket: socket.socket):
         active_connections = b''
